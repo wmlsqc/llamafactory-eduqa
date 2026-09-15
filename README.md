@@ -1,109 +1,124 @@
-# 🎓 EduQA: 知识图谱驱动的科学教育大模型指令微调平台
+# 基于 LLaMA-Factory 的教育问答模型优化与部署
 
-![Vue3](https://img.shields.io/badge/Frontend-Vue3-4FC08D?style=flat-square&logo=vue.js)
-![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat-square&logo=fastapi)
-![LLaMA-Factory](https://img.shields.io/badge/Engine-LLaMA--Factory-blue?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+> EDU-QA 的学习复现 Fork：理科指令数据 → LoRA 监督微调 → 对话推理 → 基座与微调模型评测。
 
-EduQA 是一个面向垂直教育领域的开箱即用的大语言模型（LLM）定制平台。旨在通过注入结构化的知识图谱专家知识，解决通用大模型在专业理科问答中易产生“事实性幻觉”的痛点。
+本仓库 Fork 自 [shj-cfl/EDU-QA](https://github.com/shj-cfl/EDU-QA)，保留上游代码、数据和提交历史。上游基准提交为 [`caa3685`](https://github.com/shj-cfl/EDU-QA/commit/caa3685d52fbb7e957ce1f3eb0f3e7ae1ca7434b)。本次整理新增中文项目导览、复现说明及简历能力对照；**尚未在本账号环境完成 GPU 训练、推理联调或效果复测**。
 
-本项目基于前后端分离架构设计，底层集成 LLaMA-Factory ，包含**数据构建 -> LoRA 微调 -> 对话测试 -> 定量评测**的完整生命周期。
+原作者介绍和环境说明见 [上游 README](docs/UPSTREAM_README.md)。本仓库不将上游实现或实验表现标为个人原创成果。
 
+## 项目简介
 
-## ⚙️ Architecture
+面向物理、化学等理科学习场景，通过整理问答指令数据、引入知识三元组构造训练样本，使用 LLaMA-Factory 对 Qwen 系列模型进行 LoRA 监督微调。平台以 FastAPI 提供训练调度、模型加载、问答与评测接口，使用 Vue 3 展示训练状态、对话结果和基座/微调模型对比结果。
 
-* **前端 (Frontend)**: Vue3 + Element-Plus + ECharts + Axios
-* **后端核心 (Backend)**: FastAPI + Uvicorn + Python 3.11
-* **大模型生态 (AI Stack)**: PyTorch + Hugging Face (`transformers`, `peft`)
-* **训练引擎**: [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory)
-* **推荐基座模型**: Qwen2.5-7B-Instruct / Yi-1.5-6B-Chat
+项目适合作为教育领域大模型微调与应用部署的复现起点。实际目标是学习数据构建、训练配置、模型推理及评估流程，是否改善回答质量应以独立测试和人工核验为准。
 
----
+## 已有实现
 
-## 🛠️ Environments
+| 环节 | 上游已有内容 | 主要文件 |
+|---|---|---|
+| 教育数据 | 500 条理科训练问答、50 条测试问答；上传数据和知识三元组转换 | `EDU-QA/data/`、后端 `/api/finetune` |
+| 模型微调 | 调用 `llamafactory-cli train`，配置 SFT、LoRA、学习率、轮数、batch 和验证集比例 | `EDU-QA/EDU-FT/backend/main.py` |
+| 状态展示 | 后台训练任务、训练状态查询、训练取消 | 同上及前端 `src/App.vue` |
+| 对话推理 | Transformers 加载基座、PEFT 加载 LoRA，FastAPI 提供聊天接口 | 后端 `/api/load_model`、`/api/chat` |
+| 效果评测 | 对比基座与 LoRA 的 BLEU、ROUGE-L、METEOR，并展示结果 | 后端 `/api/start_eval`、前端评测页面 |
 
-### 1. 基础环境准备
-系统要求：Linux，单卡显存 $\ge$ 24GB（建议多卡避免系统功能中模型载入冲突）。
-```bash
-# 1. 创建 Python 3.11 环境
-conda create -n edu_ft python=3.11 -y
-conda activate edu_ft
-```
+技术栈：Python、PyTorch、LLaMA-Factory、Transformers、PEFT、FastAPI、Vue 3、Element Plus。
 
-### 2. 安装核心依赖
+本次静态检查：后端 Python 文件语法解析通过；两份 JSONL 可解析且字段完整，训练和测试问题没有完全相同的文本。该检查不代表样本内容正确、没有语义泄漏或 GPU 功能已运行通过。
 
-```bash
-# 安装 PyTorch (根据的 CUDA 版本调整)
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+## 与项目方案的对应关系
 
-# 安装与微调兼容的核心大模型组件
-pip install transformers==4.40.2 peft==0.11.1 accelerate
-```
+| 简历方案中的能力 | 当前仓库状态 |
+|---|---|
+| 教育指令数据与模型监督微调 | 有相应数据和训练代码，需在自己的环境执行 |
+| Qwen2.5-7B-Instruct 与 LoRA | 上游支持，模型权重需自行准备 |
+| FastAPI 对话部署与基座/微调评测 | 有实现，需联调验证 |
+| 4 bit QLoRA 训练 | **尚未实现**，当前训练入口未设置量化参数 |
+| 合并 LoRA 后使用 vLLM 提供服务 | **尚未实现**，当前使用 Transformers/PEFT 推理 |
+| 首 Token 延迟、并发吞吐和显存压测 | **尚未提供**，需要增加独立测试脚本 |
 
-### 3. 安装 LLaMA-Factory 训练引擎
-```bash
-# 将 LLaMA-Factory 拉取至同级目录
-git clone https://github.com/hiyouga/LLaMA-Factory.git
-cd LLaMA-Factory
-pip install -e .
-```
+复现前可以将该项目写为“学习复现项目”或“项目方案”。训练和评测完成后，再依据自己的提交、日志和结果描述个人工作，不引用未实测的提升比例。
 
-### 4. 安装后端依赖
-```bash
-pip install fastapi uvicorn pydantic python-multipart
-pip install nltk rouge_chinese jieba
-```
-
-### 5. 模型准备
-从 Hugging Face 或 ModelScope 下载基座模型权重（以 `Qwen2.5-7B-Instruct` 为例），并记录其在服务器上的绝对路径。
-
----
-
-## 🚀 Quick Start
-
-### 启动后端服务 (Backend)
-进入后端项目目录，直接运行主脚本：
-```bash
-cd backend
-python main.py
-```
-> 后端服务默认运行在：`http://0.0.0.0:8001`
-
-### 启动前端界面 (Frontend)
-进入前端项目目录：
-```bash
-cd frontend
-
-# 安装 Node 依赖 (首次运行)
-npm install
-
-# 启动本地开发服务器
-npm run dev
-```
-> 访问终端输出的本地地址（通常为 `http://localhost:5173`）即可进入系统。
-
----
-
-## 📂 目录结构简述
+## 目录
 
 ```text
-EduQA/
-├── backend/
-│   ├── main.py                # FastAPI 后端核心主程序 (处理调度、加载、评测逻辑)
-│   ├── data/                  # 用户上传的原始数据集与合成指令数据存放处
-│   │   └── dataset_info.json  # 数据集与 LLaMA-Factory 的动态注册映射文件
-│   └── saves/                 # 微调生成的 LoRA 权重与评测分数持久化目录
-├── frontend/
-│   ├── src/
-│   │   ├── App.vue            # 前端主页面 (整合微调中枢、对话测试、定量测评)
-│   │   └── main.js
-│   ├── package.json
-│   └── vite.config.js
-└── README.md
+.
+├── README.md                         # 本 Fork 的中文导览
+├── docs/UPSTREAM_README.md            # 原作者说明，保留原文
+└── EDU-QA/
+    ├── data/
+    │   ├── science_ft_500.jsonl       # 上游理科训练样本
+    │   └── test.jsonl                 # 上游测试样本
+    └── EDU-FT/
+        ├── backend/
+        │   ├── main.py               # 训练、推理、评测 API
+        │   ├── evaluate_performance.py
+        │   ├── radar.py
+        │   └── requirements.txt
+        └── frontend/                 # Vue 3 界面
 ```
 
-## 🤝 贡献与开源协议
+## 复现步骤
 
-本项目作为本科毕业设计开源发布，采用 [MIT License](LICENSE) 协议。欢迎提交 Issue 或 Pull Request，一起探索生成式 AI 在教育垂直领域的无限可能！
+推荐使用具有 CUDA GPU 的 Linux 环境。上游建议约 24 GB 显存，但具体需求随模型、序列长度、batch 和是否同时加载推理模型变化；本 Fork 未测试硬件下限。
 
-**致谢**：感谢 [LLaMA-Factory](https://github.com/hiyouga/LLaMA-Factory) 团队提供的出色且易用的微调训练引擎。
+### 1. 克隆并准备依赖
+
+```bash
+git clone https://github.com/wmlsqc/llamafactory-eduqa.git
+cd llamafactory-eduqa
+```
+
+准备独立 Python 环境并安装与 CUDA 匹配的 PyTorch。安装 LLaMA-Factory 后，确认 `llamafactory-cli version` 可执行。后端还需 `transformers`、`peft`、`accelerate`、`jieba`、`nltk`、`rouge_chinese` 和 `requirements.txt` 中的依赖。前端使用支持 Vite 7 的 Node.js（20.19+ 或 22.12+）。
+
+上游说明中的固定旧版 Transformers 与源码使用的 `dtype` 参数存在版本适配点，也未锁定 LLaMA-Factory 版本。应在调通后记录实际版本，不把上游安装命令视为已经验证的完整环境锁定文件。
+
+### 2. 配置本机模型路径
+
+准备 `Qwen2.5-7B-Instruct` 基座模型，将以下文件中的上游服务器路径替换为自己的模型路径：
+
+- `EDU-QA/EDU-FT/frontend/src/App.vue`：模型选项和 `form.baseModel` 默认值。
+- `EDU-QA/EDU-FT/backend/main.py`：`run_llama_factory` 的默认基座路径。
+
+推理代码指定 `cuda:0`，需在 GPU 环境使用。暂不支持用 CPU 完整运行这条推理路径。
+
+### 3. 启动应用
+
+在仓库根目录打开后端终端：
+
+```bash
+cd EDU-QA/EDU-FT/backend
+python -m uvicorn main:app --host 127.0.0.1 --port 8001
+```
+
+另开终端，从仓库根目录启动前端：
+
+```bash
+cd EDU-QA/EDU-FT/frontend
+npm install
+npm run dev
+```
+
+当前 `vite.config.js` 固定前端端口为 **5174**，前端 API 指向 `http://127.0.0.1:8001`。以上命令面向本机开发；远程服务器可通过 SSH 端口转发使用。
+
+### 4. 数据、训练与评测
+
+1. 在训练页面上传 `EDU-QA/data/science_ft_500.jsonl`，或添加知识三元组。后端生成自己的 `data/` 和 `dataset_info.json`。
+2. 选择模型路径与 LoRA 配置，启动训练并保存日志、配置和适配器。
+3. 等训练完成后，分别加载基座和 LoRA 进行对话测试；不要同时在显存不足的单卡上启动训练与推理。
+4. 使用独立测试问题进行对比。BLEU、ROUGE-L、METEOR 是文本相似度指标，不能直接等同于理科答案正确率，需补充人工正确性检查。
+
+后端的文件上传与训练接口没有身份认证，保留为本机实验工具使用；本次 Fork 不代表已完成公开服务部署加固。
+
+## 下一步扩展
+
+- 为 QLoRA 增加量化配置与独立 YAML，记录显存、训练配置和验证结果。
+- 重新加载非量化基座后合并 LoRA，新增 vLLM 推理服务及请求示例。
+- 增加固定输入长度和并发条件下的推理压测。
+- 清洗样本、检查训练/测试重复与来源，记录模型回答的事实错误和概念遗漏。
+
+## 来源与许可说明
+
+原作者仓库：[shj-cfl/EDU-QA](https://github.com/shj-cfl/EDU-QA)。上游 README 声明采用 MIT，但在本次 Fork 的提交中未包含独立 `LICENSE` 文件。本仓库保留该声明与原始历史，不补写或伪造原作者的许可证。模型及数据仍以各自来源条款为准。
+
+训练框架：[hiyouga/LlamaFactory](https://github.com/hiyouga/LlamaFactory)。

@@ -1,0 +1,20 @@
+# Local environments and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+node_modules/
+dist/
+
+# Generated training data, weights and logs
+EDU-QA/EDU-FT/backend/data/
+EDU-QA/EDU-FT/backend/saves/
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+train_log_*.txt
+*.log
