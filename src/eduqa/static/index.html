@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教育问答 · EduQA</title>
+  <style>
+    :root { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #172b37; background: #f4f7f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 940px; margin: auto; padding: 32px 20px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    .muted { color: #52666f; font-size: 14px; line-height: 1.7; }
+    .status { border-radius: 20px; padding: 7px 12px; white-space: nowrap; background: #e1e9ed; font-size: 13px; }
+    .status[data-state="ready"] { background: #dff2e7; color: #17683a; }
+    .status[data-state="error"] { background: #ffe7e1; color: #963b28; }
+    .settings { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 20px 0; }
+    input, textarea, button { font: inherit; }
+    input, textarea { border: 1px solid #becbd1; border-radius: 8px; background: white; color: inherit; padding: 10px; }
+    input { flex: 1; min-width: 190px; }
+    button { padding: 10px 17px; border: 0; border-radius: 8px; background: #126d67; color: white; cursor: pointer; }
+    button.secondary { color: #253e4b; background: #e3ebee; }
+    button:disabled { opacity: .5; cursor: default; }
+    button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid #72b8b3; outline-offset: 3px; }
+    #conversation { min-height: 360px; max-height: 58vh; overflow-y: auto; background: white; border: 1px solid #dbe3e7; border-radius: 14px; padding: 22px; }
+    #welcome { margin: 65px 0; text-align: center; }
+    .message { padding: 15px 17px; border-radius: 10px; margin-bottom: 16px; line-height: 1.8; }
+    .message.user { background: #edf3f5; }
+    .message.assistant { border-left: 3px solid #2e9187; }
+    .role { font-size: 12px; font-weight: 700; color: #4a626f; margin-bottom: 6px; }
+    .content { white-space: pre-wrap; overflow-wrap: anywhere; }
+    .error { color: #9d3320; }
+    form { margin-top: 18px; }
+    textarea { display: block; width: 100%; resize: vertical; min-height: 98px; line-height: 1.6; }
+    .actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .actions .muted { flex: 1; }
+    footer { margin-top: 18px; }
+    @media (max-width: 600px) { main { padding: 22px 12px; } header { align-items: flex-start; } h1 { font-size: 23px; } .actions { flex-wrap: wrap; } .actions .muted { flex-basis: 100%; } #conversation { padding: 13px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><h1>教育问答 <span style="color:#126d67">EduQA</span></h1><div class="muted">从问题出发，理解概念与解题思路。</div></div>
+    <span id="status" class="status" role="status">正在检查模型</span>
+  </header>
+  <div class="settings">
+    <label for="apiKey">访问密钥</label>
+    <input id="apiKey" type="password" placeholder="服务器启用认证时填写" autocomplete="off">
+    <button id="check" type="button" class="secondary">检查连接</button>
+    <button id="clear" type="button" class="secondary">清空对话</button>
+  </div>
+  <div id="conversation" aria-label="对话记录" aria-live="polite">
+    <div id="welcome"><strong>今天想学习什么？</strong><p class="muted">例如：为什么匀速圆周运动仍然存在加速度？<br>也可以粘贴题目，并说明你卡在哪一步。</p></div>
+  </div>
+  <form id="chatForm">
+    <label for="question" class="muted">你的问题</label>
+    <textarea id="question" maxlength="12000" placeholder="输入问题，Ctrl / ⌘ + Enter 发送" required></textarea>
+    <div class="actions">
+      <span class="muted" id="hint" role="status">对话仅保存在当前页面内存中；长对话可清空后重新开始。</span>
+      <button id="stop" class="secondary" type="button" disabled>停止生成</button>
+      <button id="send" type="submit">发送问题</button>
+    </div>
+  </form>
+  <footer class="muted">模型回答可能存在错误，请核对关键结论。请勿输入个人敏感信息。页面关闭后，对话与访问密钥不会保留。</footer>
+</main>
+<script>
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const history = [];
+  let controller = null;
+  let busy = false;
+  const authHeaders = () => $('apiKey').value.trim() ? {Authorization: 'Bearer ' + $('apiKey').value.trim()} : {};
+  function status(text, state = '') { $('status').textContent = text; $('status').dataset.state = state; }
+  function setBusy(value) {
+    busy = value;
+    $('send').disabled = value;
+    $('clear').disabled = value;
+    $('stop').disabled = !value;
+    $('question').disabled = value;
+  }
+  async function checkReady() {
+    $('check').disabled = true;
+    status('正在检查模型');
+    try {
+      const response = await fetch('/readyz', {headers: authHeaders(), signal: AbortSignal.timeout(15000)});
+      if (!response.ok) throw new Error(response.status === 401 ? '请填写正确的访问密钥' : '模型尚未就绪');
+      const data = await response.json();
+      status('已连接 · ' + data.model, 'ready');
+    } catch (error) { status(error.name === 'TimeoutError' ? '连接检查超时' : error.message, 'error'); }
+    finally { $('check').disabled = false; }
+  }
+  function addMessage(role, text) {
+    $('welcome')?.remove();
+    const node = document.createElement('article');
+    node.className = 'message ' + role;
+    const label = document.createElement('div');
+    label.className = 'role';
+    label.textContent = role === 'user' ? '你' : '教育问答助手';
+    const content = document.createElement('div');
+    content.className = 'content';
+    content.textContent = text;
+    node.append(label, content);
+    $('conversation').append(node);
+    $('conversation').scrollTop = $('conversation').scrollHeight;
+    return content;
+  }
+  async function readEvents(response, onDelta) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finished = false;
+    function event(block) {
+      const data = block.split('\n').filter(line => line.startsWith('data:')).map(line => line.slice(5).trimStart()).join('\n');
+      if (!data) return;
+      if (data.trim() === '[DONE]') { finished = true; return; }
+      const chunk = JSON.parse(data);
+      if (chunk.error) throw new Error(chunk.error.message || '生成失败');
+      const delta = chunk.choices?.[0]?.delta?.content;
+      if (typeof delta === 'string') onDelta(delta);
+      if (chunk.choices?.[0]?.finish_reason === 'length') $('hint').textContent = '回答达到本次长度上限，可以继续追问。';
+    }
+    try {
+      while (!finished) {
+        const {value, done} = await reader.read();
+        buffer += decoder.decode(value, {stream: !done});
+        // Normalize complete CRLF pairs; retaining a trailing CR handles chunk boundaries.
+        buffer = buffer.replace(/\r\n/g, '\n');
+        let boundary;
+        while ((boundary = buffer.indexOf('\n\n')) >= 0) {
+          event(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          if (finished) break;
+        }
+        if (done) {
+          if (!finished) throw new Error('连接提前结束，请重试');
+          break;
+        }
+      }
+    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
+  }
+  $('chatForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const question = $('question').value.trim();
+    if (busy || !question) return;
+    if (history.length >= 80) { $('hint').textContent = '对话轮次较多，请清空后开始新对话。'; return; }
+    setBusy(true);
+    $('hint').textContent = '正在生成，可以随时停止。';
+    addMessage('user', question);
+    const answer = addMessage('assistant', '正在思考…');
+    let text = '';
+    let succeeded = false;
+    controller = new AbortController();
+    try {
+      const response = await fetch('/v1/chat/completions', {
+        method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders()},
+        body: JSON.stringify({messages: [...history, {role: 'user', content: question}], stream: true, temperature: 0.3}),
+        signal: controller.signal
+      });
+      if (!response.ok) {
+        const descriptions = {401: '访问密钥不正确', 422: '问题或对话超过限制，请缩短问题或清空对话', 429: '模型繁忙，请稍后重试', 502: '模型服务返回异常，请检查服务器', 503: '模型未连接，请检查服务器', 504: '模型响应超时，请重试'};
+        throw new Error(descriptions[response.status] || '请求失败（' + response.status + '）');
+      }
+      await readEvents(response, delta => { text += delta; answer.textContent = text; $('conversation').scrollTop = $('conversation').scrollHeight; });
+      if (!text.trim()) throw new Error('模型未返回回答，请重试');
+      succeeded = true;
+      status('模型可用', 'ready');
+      history.push({role: 'user', content: question}, {role: 'assistant', content: text});
+      $('question').value = '';
+      if ($('hint').textContent === '正在生成，可以随时停止。') $('hint').textContent = '回答已完成，可以继续追问。';
+    } catch (error) {
+      const message = error.name === 'AbortError' ? '已停止生成，未完成的回答不会加入后续上下文。' : error.message;
+      answer.textContent = text ? text + '\n\n[' + message + ']' : message;
+      if (error.name !== 'AbortError') { answer.classList.add('error'); status('请求未完成', 'error'); }
+      $('hint').textContent = '问题已保留，可修改后重试。';
+    } finally {
+      controller = null;
+      setBusy(false);
+      $('question').focus();
+      if (!succeeded) $('conversation').scrollTop = $('conversation').scrollHeight;
+    }
+  });
+  $('question').addEventListener('keydown', event => { if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); $('chatForm').requestSubmit(); } });
+  $('stop').addEventListener('click', () => controller?.abort());
+  $('check').addEventListener('click', checkReady);
+  $('clear').addEventListener('click', () => { history.length = 0; $('conversation').replaceChildren(); $('hint').textContent = '已清空，可以开始新的对话。'; $('question').focus(); });
+  checkReady();
+</script>
+</body>
+</html>

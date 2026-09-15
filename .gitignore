@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .venv/
+.venv-*/
 venv/
 __pycache__/
 *.py[cod]
@@ -18,3 +19,9 @@ EDU-QA/EDU-FT/backend/saves/
 *.bin
 train_log_*.txt
 *.log
+artifacts/
+models/
+.pytest_cache/
+*.egg-info/
+build/
+output/

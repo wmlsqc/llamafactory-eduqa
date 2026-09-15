@@ -1,0 +1,25 @@
+name: CPU checks
+permissions:
+  contents: read
+on:
+  push:
+  pull_request:
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -e '.[dev]'
+      - run: python -m pip check
+      - run: python -m pytest -q
+      - run: python -m eduqa prepare-data
+      - run: python -m eduqa train --dry-run
+      - run: python -m compileall -q src

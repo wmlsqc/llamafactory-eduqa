@@ -1,0 +1,11 @@
+# Reload the ORIGINAL unquantized base to merge QLoRA adapters.
+# quantization_bit/export_quantization_bit must NEVER be used during merging.
+model_name_or_path: Qwen/Qwen2.5-7B-Instruct
+adapter_name_or_path: artifacts/models/eduqa-adapter
+template: qwen
+finetuning_type: lora
+trust_remote_code: false
+export_dir: artifacts/models/eduqa-merged
+export_size: 4
+export_device: cpu
+export_legacy_format: false

@@ -1,0 +1,19 @@
+# Linux x86_64, Python 3.11; use a dedicated training virtual environment.
+# Versions checked against LLaMA-Factory v0.9.3 requirements.
+torch==2.6.0
+torchvision==0.21.0
+torchaudio==2.6.0
+transformers==4.51.3
+tokenizers==0.21.1
+peft==0.15.2
+accelerate==1.7.0
+datasets==3.6.0
+trl==0.9.6
+bitsandbytes==0.45.5
+huggingface-hub==0.31.4
+numpy==1.26.4
+pydantic==2.10.6
+starlette==0.46.2
+sse-starlette==2.3.5
+gradio==5.31.0
+llamafactory @ git+https://github.com/hiyouga/LlamaFactory.git@v0.9.3

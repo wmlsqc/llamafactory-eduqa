@@ -1,0 +1,51 @@
+services:
+  vllm:
+    image: vllm/vllm-openai:v0.8.5
+    ipc: host
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    volumes:
+      - ${EDUQA_MODEL_PATH:-../artifacts/models/eduqa-merged}:/model:ro
+    environment:
+      VLLM_API_KEY: ${EDUQA_BACKEND_API_KEY:-}
+    command:
+      - --model
+      - /model
+      - --served-model-name
+      - eduqa
+      - --dtype
+      - bfloat16
+      - --max-model-len
+      - "2048"
+      - --max-num-seqs
+      - "4"
+      - --max-num-batched-tokens
+      - "2048"
+      - --gpu-memory-utilization
+      - "0.88"
+      - --enforce-eager
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 20s
+      timeout: 10s
+      retries: 30
+      start_period: 120s
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      EDUQA_BACKEND_URL: http://vllm:8000/v1
+      EDUQA_MODEL: eduqa
+      EDUQA_API_KEY: ${EDUQA_API_KEY:-}
+      EDUQA_BACKEND_API_KEY: ${EDUQA_BACKEND_API_KEY:-}
+    depends_on:
+      vllm:
+        condition: service_healthy

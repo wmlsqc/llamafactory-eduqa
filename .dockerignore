@@ -1,0 +1,7 @@
+.git
+.venv*
+artifacts
+models
+EDU-QA
+.env*
+__pycache__
